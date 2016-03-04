@@ -1,0 +1,530 @@
+(function() {
+    'use strict';
+
+    var disputesDirectives = angular.module('DisputesDirectives',['DisputesServices', 'c1']);
+
+    /**
+    * Checks a dollar amount against a valid current regex.
+    * Then checks against a second amount to ensure the first amount is not greater than the second amount
+    */
+    var checkValidity = function(amount, amountToValidateAgainst) {
+        var amountValid = true;
+        var currencyValid = true;
+        var pattern;
+
+        //Pattern needs to have the period escaped for the regular expression, however jshint is confused by this
+        /* jshint ignore:start */
+        pattern = new RegExp('^[0-9]*\.?[0-9]{0,2}$');
+        /* jshint ignore:end */
+
+        if(!pattern.test(amount) || isNaN(amount) || amount <= 0.00) {
+            currencyValid = false;
+        }
+
+        if(amount > amountToValidateAgainst) {
+            amountValid = false;
+        }
+
+        return {
+            amountValidity : amountValid,
+            doubleCheckValidity : currencyValid
+        };
+    };
+
+    /**
+    * Validates a amount field to ensure it's the proper format, is not larger than another amount
+    * and has no more than 2 decimals and a certain length, along with adding 00's at the end if the user
+    * types in no cents. Uses two other helper functions to accomplish this.
+    */
+    disputesDirectives.directive('validateAmountInput', function($timeout){
+        return {
+            priority: 9, // check the amount first before applying any other directives
+            require: 'ngModel',
+            link: function(scope, element, attrs, ngModel) {
+
+                ngModel.$parsers.push(function(value){
+                    var validity = checkValidity((value||'').replace(scope.region.decimalSeparator,'.'), scope.disputesData.transactionAmount);
+                    ngModel.$setValidity('showAmountError', validity.amountValidity); // invalid amount
+
+                    if(value !== undefined){
+                        ngModel.$setValidity('showDoubleCheckError', validity.doubleCheckValidity); // please double check for blanks or invalid characters
+                    }
+
+                    return value;
+                });
+
+                element.on('blur', function() {
+                    var delayedValidation = function() {
+                        //Normalize value to use a period instead of the locale's decimal separator
+                        var normalizedAmount = normalizeDecimalValue(ngModel.$viewValue, scope.region);
+                            
+                        var isValid = true;
+                        var viewValue = ngModel.$viewValue;
+                        
+                        if(normalizedAmount !== '' && !isNaN(normalizedAmount) && !containsErrantPeriod(ngModel.$viewValue, scope.region) && normalizedAmount > 0){
+                            var numberValue = parseFloat(normalizedAmount);
+                            isValid = numberValue < scope.disputesData.transactionAmount && numberValue > 0;
+                            if(isValid && !hasAppropriateDecimals(normalizedAmount)){
+                                isValid = false;
+                            }else{
+                                viewValue = numberValue.toFixed(2);
+                            }                       
+                        }else{   
+                            isValid = false;
+                            viewValue = createLocalizedZero(scope.region);
+                        }
+                        
+                        ngModel.$setValidity('showDoubleCheckError',  !isValid); //if not valid show double check error
+                        ngModel.$setViewValue(viewValue.replace('.',scope.region.decimalSeparator));
+                        
+                        ngModel.$render(); // doing this instead of scope.$apply(), according to doc it's expected that we call this....
+                    };
+
+                    $timeout(delayedValidation,100);
+                });
+            }
+        };
+    });
+    
+    var containsErrantPeriod = function(value, region) {
+        return region.decimalSeparator !== '.' && value.indexOf('.') !== -1;
+    };
+    
+    var normalizeDecimalValue = function(value, region){
+        return region && value?  value.replace(region.decimalSeparator, '.') : value;
+    };
+    
+    var hasAppropriateDecimals = function(value){
+        var splits = value.split('.');
+        return  splits.length === 1 || splits[1].length <= 2;
+    };
+    
+    var createLocalizedZero = function(region){
+        return '0'+ region.decimalSeparator+'00';
+    };
+
+
+    /**
+    * Makes sure the date is in the right format for its locale
+    */
+    function dateFormatCheck(date, dateFormat) {
+        var yyyy = date.getFullYear();
+        var mm = date.getMonth() + 1; /* getMonth() IS ZERO-BASED */
+        var dd = date.getDate();
+
+        var separator = dateFormat.charAt(2);
+
+        if (mm < 10) {
+            mm = '0' + mm; // add 0 to front of number so 9 looks like 09
+        }
+        if (dd < 10) {
+            dd = '0' + dd;
+        }
+
+        var finalDateString = dateFormat.charAt(0) === 'M' ? mm + separator + dd + separator + yyyy :
+        dd + separator + mm + separator + yyyy;
+
+        return finalDateString;
+    }
+
+    /*
+    * Take a date string and pick out the various pieces to create a new Date object that we can then check
+    * for validity. Would love to see this go away once the datepicker returns a Date object.
+    */
+    function createRegionSpecificDateObject(dateStr, dateFormat) {
+        var regionDate = dateFormat.charAt(0) === 'M' ? new Date(dateStr.substring(6,10), (dateStr.substring(0,2)-1), dateStr.substring(3,5)) :
+        new Date(dateStr.substring(6,10), (dateStr.substring(3,5)-1), dateStr.substring(0,2));
+
+        return regionDate;
+    }
+    
+    function isValidDate(dateStr, touched, region) {
+
+        var dateRegExp = /^\d{2}[.\/-]\d{2}[.\/-]\d{4}/;
+        
+        if(dateStr === '' || dateStr === undefined){
+            return false;
+        }
+
+        // IE8 Hack
+        if((dateStr === region.datePlaceHolder || dateStr === undefined) && !touched){
+            return true;
+        }
+        
+        //Check that date is not in the future
+        var today = new Date();
+        var dateForm = createRegionSpecificDateObject(dateStr, region.dateFormat);
+        if(dateForm > today){
+            return false;
+        }
+    
+        else if(isNaN(dateForm.getTime()) || !dateRegExp.test(dateStr) || dateStr !== dateFormatCheck(dateForm, region.dateFormat)){
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+    
+    disputesDirectives.directive('validateDateOnChange', function($timeout) {
+        return {
+            restrict: 'AE',
+            require: 'ngModel',
+            link: function(scope, element, attrs, ngModel) {
+
+                ngModel.$parsers.push(function(value){
+                    if(value !== scope.region.datePlaceHolder && value !== undefined){
+                        ngModel.$setValidity('invalidDate', isValidDate(value, true, scope.region));
+                        touched = true;
+                    }
+                    
+                    return value;
+                });
+                
+                var touched;
+                
+                // Check if placeholders are supported.  If not, set touched to false so that we ignore the initial blur that happens
+                // when using the ie8-placeholder directive
+                var i = document.createElement('input');
+                var supportPlaceholder = typeof i.placeholder !== 'undefined';
+                
+                if (!supportPlaceholder) {
+                    touched = false;
+                }else{
+                    touched = true;
+                }
+
+                // On blur check for either the placeholder value set with placeholder-ie8 or undefined
+                // if the model is one of these values, set the date to invalid
+                element.on('blur', function() {
+                    if(ngModel.$modelValue === undefined || ngModel.$modelValue === scope.region.datePlaceHolder){
+                        var delayedValidation = function(){
+                            ngModel.$setValidity('invalidDate', isValidDate(ngModel.$modelValue, touched, scope.region));
+                            touched = true;
+                            scope.$apply();
+                        };
+                        $timeout(delayedValidation, 100);
+                    }
+                });
+            }
+        };
+    });
+    
+    disputesDirectives.directive('checkDateInput', function($window, browser) {
+        return {
+            require: 'ngModel',
+            link: function(scope, element, attrs, ngModel) {
+                var whichBrowser = browser();
+                
+                element.on('keypress', function(event) {
+                    var keyPressed = event.which;
+                    var textSelected = selectedText(element);
+                    
+                    if((event.shiftKey && (keyPressed !== 9 && keyPressed !==0)) || keyPressed === 46) {
+                        event.preventDefault();
+                        scope.preventWasCalled = true;
+                    }
+                    
+                    if(ngModel.$modelValue !== undefined && (ngModel.$modelValue !== scope.region.datePlaceHolder)) {
+                        if(ngModel.$modelValue.length > 9 && textSelected.length === 0) {
+                            if(!(whichBrowser === 'firefox' && (keyPressed === 8 || keyPressed === 0))) {
+                                event.preventDefault();
+                            }
+                        }
+                    }
+                });
+            }
+        };
+    });
+    
+    var selectedText = function(element) {
+        var text = '';
+        if (typeof window.getSelection !== 'undefined') {
+            var ta = element.get(0);
+            text = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+        } else if (typeof document.selection !== 'undefined' && document.selection.type === 'Text') {
+            text = document.selection.createRange().text;
+        }
+        
+        return text;
+    };
+    
+ // White list of keys per JavaScript defined character codes for keyboard keys
+    var isValidKey = function(keyPressed, additionalValidKeys) {
+
+        var allowedKeys = [8,9,48,49,50,51,52,53,54,55,56,57,190];
+        allowedKeys = allowedKeys.concat(additionalValidKeys);
+
+        var keyAllowed = false;
+
+        for(var i=0; i<allowedKeys.length; i++) {
+            if(allowedKeys[i] === keyPressed) {
+                keyAllowed = true;
+                break;
+            }
+        }
+
+        return keyAllowed;
+    };
+
+    var limitLengthAndDecimal = function(amountDisputed, scope, keyPressed, thousandsSeperator) {
+        var disputedLength = amountDisputed.length;
+        var indexOfDecimal = String(amountDisputed).indexOf(thousandsSeperator);
+        var shouldLimitLength = true;
+        var maxLength;
+
+        if(indexOfDecimal !== -1){
+            maxLength = 9; // 1 less than total to prevent keypress greater than 10 or 7
+        } else {
+            maxLength = 6;
+        }
+
+        var lengthAfterDecimal = amountDisputed.substring(indexOfDecimal, (amountDisputed.length)).length;
+        // check max length first
+        if(keyPressed !== thousandsSeperator.charCodeAt(0) && lengthAfterDecimal > 1 && disputedLength > maxLength) { // 46 is '.' in chrome
+            shouldLimitLength = false;
+        }
+
+        // only allow one '.' in the field
+        if(keyPressed === thousandsSeperator.charCodeAt(0) && indexOfDecimal !== -1) {
+            shouldLimitLength = false;
+        }
+
+        if(lengthAfterDecimal > 2 && !shouldLimitLength) {
+            // this looks weird and it is but the substring is grabbing just what is BEFORE
+            // the key press, once the key press is complete we WOULD have an invalid length
+            // but by grabbing the string before the press finishes we basically pretend the key press
+            // never happened; now I have some overseas investments I'd like to tell you about
+            amountDisputed = amountDisputed.substring(0, amountDisputed.length);
+            scope.$apply();
+            shouldLimitLength = false;
+
+        }
+
+        return shouldLimitLength;
+    };
+
+    /**
+    * Limits keyboard input to a white list of keys supplied in the isValidKey function.
+    * Also limit's the length of the input and the decimal character using the limitLengthAndDecimal function
+    */
+    disputesDirectives.directive('limitKeyboardInput', function (browser) {
+        return {
+            priority: 10,
+            link: function(scope, element) {
+                element.on('keypress', function(event) {
+
+                    var keyPressed = event.which;
+                    var whichBrowser = browser();
+                    
+
+                    var text = selectedText(element);
+
+                    // if we are just hightlighting, or selecting text, then return
+                    if(text.length > 0) {
+                        return;
+                    }
+
+                    // Chrome and IE do not register delete on keypress but firefox does
+                    // and we don't care what firefox does because delete is always cool
+                    if(whichBrowser === 'firefox' && (keyPressed === 8 || keyPressed === 0)) {
+                        return;
+                    }
+
+                    var isAllowed = false;
+
+                    var additionalAllowedKeys = [scope.region.decimalSeparator.charCodeAt(0)];
+                    isAllowed = isValidKey(keyPressed, additionalAllowedKeys);
+                    
+                    if(scope.amountDisputed !== undefined && isAllowed && (scope.amountDisputed !== scope.region.amountPlaceHolder)) {
+                        isAllowed = limitLengthAndDecimal(scope.amountDisputed, scope, keyPressed, scope.region.decimalSeparator);
+                    }
+
+                    // Value initialized only in case of testing
+                    if(scope.wasKeyAllowed !== undefined){
+                        scope.wasKeyAllowed = isAllowed;
+                    }
+
+                    if(!isAllowed) {
+                        event.preventDefault();
+                    }
+                });
+
+            } // end 'link' code
+        };
+
+    });
+    
+    disputesDirectives.directive('addOptgroup', function() {
+        return {
+            link: function() {
+                if (navigator.userAgent.match(/(iPad|iPhone|iPod touch|Android.*\d);/i)) {
+                    var selects = document.querySelectorAll('select');
+                    for (var i = 0; i < selects.length; i++ ){
+                        selects[i].appendChild(document.createElement('optgroup'));
+                    }
+                    var optgroup = document.querySelectorAll('optgroup');
+                    optgroup[0].appendChild(document.createElement('option'));
+                    var option = document.querySelectorAll('option');
+                    option[0].setAttribute('disabled', true);
+                }
+            }
+        };
+    });
+    
+    disputesDirectives.directive('returnToTransactions', function($window) {
+        return {
+            link: function(scope, element, attrs) {
+                element.bind('click', function() {
+                    $window.location = '#/accounts/' + scope.accountId + '/transactions';
+                });
+                attrs.$set('href', '#/accounts/' + scope.accountId + '/transactions');
+            }
+        };
+    });
+    
+    /**
+    * Limit's text length in a cross-browser compatible way.
+    * Uses an atrribute 'text-limit' on the html element to determine length
+    */
+    disputesDirectives.directive('limitTextLength', function() {
+        return {
+            priority: 9,
+            restrict: 'AE',
+            scope: {
+                limitTextLength: '='
+            },
+            link: function(scope, element, attrs) {
+                scope.$watch('limitTextLength', function() {
+                    element.on('keypress', function(event) {
+                        if(scope.limitTextLength !== undefined) {
+                            if(scope.limitTextLength.length > attrs.textLimit) {
+                                event.preventDefault();
+                            }
+                        }
+                    });
+                    if(scope.limitTextLength !== undefined) {
+                        scope.limitTextLength = scope.limitTextLength.substring(0, attrs.textLimit);
+                    }
+                });
+            }
+        };
+    });
+    
+    disputesDirectives.directive('checkSpecialChars', function() {
+        return {
+            require: 'ngModel',
+            link: function(scope, element, attrs, ngModel) {
+                ngModel.$parsers.push(function(value){
+                    var errorMessageChars = false;
+                   
+                    if(value !== undefined){
+                        errorMessageChars = checkSpecialChars(value);
+                    }
+                    ngModel.$setValidity('specialCharError', errorMessageChars);
+                    
+                    return value;
+                });
+            }
+        };
+    });
+
+    disputesDirectives.directive('touchedAndRequired', function($timeout) {
+        return {
+            restrict: 'AE',
+            require: 'ngModel',
+            link: function(scope, element, attrs, ngModel) {
+                ngModel.$parsers.push(function(value){
+                    if(value !== undefined){
+                        //ngModel.$setValidity('touchedAndRequired', true);
+                        scope.disputesForm[attrs.name].$setValidity('touchedAndRequired', true);
+                    }
+                                        
+                    return value;
+                });
+                
+                element.on('blur', function() {
+                    var delayedValidation = function(){
+                        if(ngModel.$viewValue === '' || ngModel.$viewValue === undefined || ngModel.$viewValue === null){
+                            //ngModel.$setValidity('touchedAndRequired', false);
+                            scope.disputesForm[attrs.name].$setValidity('touchedAndRequired', false);
+                        }else{
+                            //ngModel.$setValidity('touchedAndRequired', true);
+                            scope.disputesForm[attrs.name].$setValidity('touchedAndRequired', true);
+                        }
+                        
+                        scope.$apply();
+                    };
+                    
+                    $timeout(delayedValidation, 100);
+                });
+                
+                
+            }
+        };
+    });
+    
+    disputesDirectives.directive('changeOnMouseDown', function() {
+        return {
+            restrict: 'AE',
+            require: 'ngModel',
+            link: function(scope, element, attrs, ngModel) {
+                element.on('mousedown', function(event){
+                    event.preventDefault();
+                    element.click();
+                    element.focus();
+                    ngModel.$setViewValue(element.val());
+                });
+            }
+        };
+    });
+    
+    var checkSpecialChars = function(text) {
+        var errorMessageChars = false;
+        
+        if(text !== undefined && text.search(/[^a-zA-Z0-9/\-\s\'\.\,\&\@\:\?\!\(\)\$\#\/\\]+/) === -1) {
+            if(text.search('&#') === -1) {
+                errorMessageChars = true;
+            }
+        }
+        
+        return errorMessageChars;
+    };
+    
+    disputesDirectives.directive('confirms', function(){
+        return {
+            restrict: 'A',
+            require: 'ngModel', // Requires the NgModelController to be injected
+            link: function(scope,elem,attrs, ngModelCtrl){
+                var oldVal = scope[attrs.confirms];
+                scope.$watch(attrs.confirms, function(){
+                    if(oldVal !== scope[attrs.confirms]){
+                        ngModelCtrl.$setViewValue();
+                        ngModelCtrl.$render();
+                    }
+                    
+                    oldVal = scope[attrs.confirms];
+                });
+            }
+        };
+    });
+    
+    disputesDirectives.directive('falseValue', function(){
+        return {
+            restrict: 'A',
+            require: 'ngModel',
+            link: function(scope,elem,attrs, ngModelCtrl){
+                scope.$watch(attrs.ngModel, function(value){
+                    if(!value){
+                        var newVal;
+                        if(attrs.falseValue !== undefined && attrs.falseValue !== ''){
+                            newVal = attrs.falseValue;
+                        }
+                        
+                        ngModelCtrl.$setViewValue(newVal);
+                    }
+                });
+            }
+        };
+    });
+})();

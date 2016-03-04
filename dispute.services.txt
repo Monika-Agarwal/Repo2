@@ -1,0 +1,252 @@
+(function () {
+    'use strict';
+
+    var DisputeAppServices = angular.module('DisputesServices',['ngResource', 'c1']);
+
+    /*
+    * All the data for the initial disputes page request.
+    * TODO refectore the entitlements call so that we halt if not entitled.
+    */
+    DisputeAppServices.factory('disputesInitialData', function(httpRequestService, reasonTranslationService, i18nService, $q, Logger, $window) {
+        var logger = Logger.getLogger(DisputeAppServices.name + '::disputesInitialData');
+        return function(accountId, transactionId, startDate, endDate) {
+            
+            var disputesData = httpRequestService('TransactionAndEmailData', 'get', '/api/accounts/'+accountId+'/transactions/'+transactionId+'/'+startDate+'/'+endDate+'/disputes/data', null, {cache:false});
+            var disputesOptions = httpRequestService('DisputesOptions', 'get', 'disputes/disputesOptions.json', null, {cache:false});
+            var entitled = httpRequestService('DisputesEntitlements','get','/api/accounts/'+accountId+'/disputes/entitlements', null, {cache:false});
+            
+            i18nService.initilize();
+            
+            return $q.all([disputesData, disputesOptions, entitled, i18nService.defer.promise ]).then(function onSuccess(results) {
+                var permission = results[2].result;
+                if(permission === 'DENY'  || permission === undefined) {
+                    logger.info('Disputes is DENY');
+                    $window.location.href = '/ui/#/error/3/activity/3/result/3';
+                } else {
+                    logger.info('Disputes is ALLOW');
+                    return {
+                        entitledPerm: results[2].result,
+                        transactionStartDate: startDate,
+                        transactionEndDate: endDate,
+                        transId: transactionId,
+                        disputesData: results[0],
+                        disputesOptions: reasonTranslationService(results[1])
+                    };
+                   
+                }
+            });
+        };
+    });
+
+    /*
+    * Any HTTP request/response comes through here. Specify the name of the service
+    * or provide some context for the logging statements, type of request (post, get, etc),
+    * url and any payload (can be null)
+    */
+    DisputeAppServices.factory('httpRequestService', function($http, $q, Logger) {
+        return function(name, requestType, url, payload, config) {
+            var logger = Logger.getLogger(DisputeAppServices.name + name);
+            var deferred = $q.defer();
+
+            $http[requestType](url, payload, config)
+                .success(function(data) {
+                logger.debug(name + ' returned successfully');
+                deferred.resolve(data);
+            })
+            .error(function(data, status) {
+                logger.error('Error encountered while calling ' + requestType + ' for ' + name+'. Got a status of: '+status);
+                deferred.reject(status);
+            });
+        
+            return deferred.promise;
+        };
+    });
+
+    /*
+    * Special service for the form submission, redirect's if there is an error.
+    * TODO look into an angular interceptor instead of using the 'redirectAfterDispute' function
+    */
+    DisputeAppServices.factory('submitFormService', function($rootScope, Logger, httpRequestService, redirectAfterDispute) {
+        var logger = Logger.getLogger(DisputeAppServices.name + '::submitFormService');
+        
+        return function(disputesRequest, accountId, transactionId) {
+            $rootScope.loadingView = true;
+            
+            return httpRequestService('SubmissionService','post','/api/accounts/disputes/dispute',angular.toJson(disputesRequest)).then(function(data) {
+                logger.info('Submitted disputes form');
+                
+                $rootScope.loadingView = false;
+                $rootScope.disputeConfirm = data;
+
+                if(data.notices.rtmErrorSubmit) {
+                    logger.debug('RTM Error Code: ' +data.notices.rtmErrorSubmit.eventCode + ' - ' + data.notices.rtmErrorSubmit.status);
+                    return data;
+                } else {
+                    logger.info('Notices are:');
+                    logger.info(data.notices);
+                    redirectAfterDispute(accountId, transactionId, data.notices);
+                }
+            })['catch'](function(){
+                $rootScope.loadingView = false;
+                redirectAfterDispute(accountId, transactionId);
+            });
+        };
+    });
+
+    
+    /*
+    * Redirect to a certain page based on the backend code returned
+    */
+    DisputeAppServices.factory('redirectAfterDispute', function($location, $window) {
+        function determineRedirectPath(notices) {
+            if(notices.redirect && notices.redirect.eventCode === '120112') {
+                return 'casealreadycomplete';
+            }
+            else if(notices.redirect && notices.redirect.eventCode === '120111'){
+                return 'casealreadyopened';
+            }
+            else {
+                return 'confirmation';
+            }
+        }
+        
+        return function(accountId, transactionId, notices) {
+            if(notices === undefined) {
+                //go to feature unavailable
+                $window.location.href = '#/error/3/activity/10094/result/100';
+            } else {
+                var confirmationPath = 'accounts/' + accountId + '/transactions/' + transactionId +'/disputes/';
+                
+                confirmationPath += determineRedirectPath(notices);
+                $location.path(confirmationPath).replace();
+            }
+        };
+    });
+    
+    /*
+    * Filter the text returned so that it is readable
+    */
+    DisputeAppServices.factory('reasonTranslationService', function(i18nService) {
+        return function(disputesOptions) {
+            //Exit early if not receiving the correct type of input
+            if(disputesOptions[0].disputesOptionText === undefined){
+                return undefined;
+            }
+            for(var i=0; i < disputesOptions.length; i++) {
+                if(disputesOptions[i].disputesFiltered !== true) {
+                    disputesOptions[i].disputesOptionText = i18nService.translate(disputesOptions[i].disputesOptionText);
+                    disputesOptions[i].reasonDesc = i18nService.translate(disputesOptions[i].reasonDesc);
+                    if(disputesOptions[i].disputesID === '9') {
+                        for(var j=0; j < disputesOptions[i].disputesPaymentMethods.length; j++){
+                            disputesOptions[i].disputesPaymentMethods[j].disputesPaymentMethod = i18nService.translate(disputesOptions[i].disputesPaymentMethods[j].disputesPaymentMethod);
+                        }
+                    }
+                    for(var contactMethod=0; contactMethod < disputesOptions[i].disputeContactMethod.length; contactMethod++){
+                    	disputesOptions[i].disputeContactMethod[contactMethod].code = disputesOptions[i].disputeContactMethod[contactMethod].text;
+                    	disputesOptions[i].disputeContactMethod[contactMethod].text = i18nService.translate(disputesOptions[i].disputeContactMethod[contactMethod].text);
+                    	for(var responseMethod=0; responseMethod < disputesOptions[i].disputeContactMethod[contactMethod].disputeMerchantResponse.length; responseMethod++){
+                    		disputesOptions[i].disputeContactMethod[contactMethod].disputeMerchantResponse[responseMethod].code = disputesOptions[i].disputeContactMethod[contactMethod].disputeMerchantResponse[responseMethod].text;
+                        	disputesOptions[i].disputeContactMethod[contactMethod].disputeMerchantResponse[responseMethod].text = i18nService.translate(disputesOptions[i].disputeContactMethod[contactMethod].disputeMerchantResponse[responseMethod].text);
+                        }
+                    }
+                    
+                    disputesOptions[i].disputesFiltered = true;
+                }
+            }
+            return disputesOptions;
+        };
+    });
+
+    /*
+    * A very naughty browser check service for those times where you have no
+    * other means of handling browser incompatibility.
+    */
+    DisputeAppServices.factory('browser', ['$window', function($window) {
+
+        return function() {
+
+            var userAgent = $window.navigator.userAgent;
+
+            var browsers = {chrome: /chrome/i, safari: /safari/i, firefox: /firefox/i, ie: /internet explorer/i};
+
+            for(var key in browsers) {
+                if (browsers[key].test(userAgent)) {
+                    return key;
+                }
+            }
+
+            return 'unknown';
+        };
+
+    }]);
+    
+    /*
+    * Give us a chat love.
+    */
+    DisputeAppServices.factory('chatService', function(chatListener){
+        var methods = {};
+        
+        function setDefaultValue(input){
+            return (input === undefined ? '' : input);
+        }
+        
+        function sendDataOnDisputesConfirmationPageLoad(){
+            var pageData = {
+                    'tfsFunction': 'disputes',
+                    'Section': 'Do Not Recognize a Charge',
+                    'ConversionStage': '2 - Dispute Chg',
+                    'Status':'complete',
+                    'Submit_OrderTotal':'1'
+                };
+            
+            chatListener.sendTfsData('tfsPageData', pageData, 'pageload');
+        }
+        
+        function sendDataOnDisputesAlreadyClosedOpenPageLoad(){
+            var pageData = {
+                    'tfsFunction': 'disputes',
+                    'Section': 'Do Not Recognize a Charge',
+                    'ConversionStage': '3 - Duplicate Dispute',
+                };
+            
+            chatListener.sendTfsData('tfsPageData', pageData, 'pageload');
+        }
+        
+        methods.sendDataOnDisputesFormPageLoad = function(disputesData){
+            
+            var pageData = {
+                    'tfsFunction': 'disputes',
+                    'Section': 'Do Not Recognize a Charge',
+                    'ConversionStage': '1 - Dispute Chg',
+                    'Dsp_TransactionDate': setDefaultValue(disputesData.date),
+                    'Dsp_PostDate': setDefaultValue(disputesData.postedDate),
+                    'Dsp_ChargeAmount': setDefaultValue(disputesData.transactionAmount),
+                    'Dsp_Category': setDefaultValue(disputesData.category),
+                    'Dsp_MerchantInfo': setDefaultValue(disputesData.merchantInfo),
+                    'Status':'started',
+                    'Start_OrderTotal':'1'
+                };
+            
+            chatListener.sendTfsData('tfsPageData', pageData, 'pageload');
+        };
+                
+        methods.sendDataOnDisputesSubmit = function(status){
+            if(status === 'confirmation'){
+                sendDataOnDisputesConfirmationPageLoad();
+            } else if(status === 'casealreadyopened' || status === 'casealreadycomplete'){
+                sendDataOnDisputesAlreadyClosedOpenPageLoad();
+            }
+        };
+        
+        methods.sendDataOnDisputesReasonSelection = function(reason){
+            var pageData = {
+                    'Dsp_Reason': setDefaultValue(reason)
+                };
+            
+            chatListener.sendTfsData('tfsPageData', pageData, 'click');
+        };
+        
+        return methods;
+    });
+    
+})();

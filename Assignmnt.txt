@@ -1,0 +1,37 @@
+Assignment
+
+
+Travel Notifications form should contain the following:
+From Date : (MM/DD/YYYY) 
+No date picker required
+Only numbers and / allowed
+Validate date
+Validate date entered is after or from today¹s date onwards
+
+
+To Date : (MM/DD/YYYY)
+No date picker required
+Only numbers and / allowed
+Validate date
+Validate date entered is after From Date onwards
+
+
+Set a Destination Country
+Dropdown with a list of 5 countries to select: US, India, Russia, China, Japan
+
+Set an email address
+Validate email address
+
+Set a phone number (xxx-xxx-xxxx)
+
+Validate phone number (any other characters should not be allowed to enter)
+
+Submit button : Goes to the backend Java and confirms the data corresponds to the following else gives back an error:
+From Date : 06/10/2016
+To Date : 06/15/2016
+Destination Country: Japan
+Email address : disrupt@capitalone.com
+Phone number: 804-999-9999
+Once everything is confirmed it takes you to "More Services"
+Cancel Button : brings it back to Account Summary
+================================================================================================================================================================================================================================================================================================================================================================

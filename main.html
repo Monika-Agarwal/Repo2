@@ -1,0 +1,363 @@
+<section id="disputes_main" class="disputes cf one-design" ng-class="{'left': !isThemed}">
+	<h1 class="heading page_title" ng-class="{centered: isThemed}">
+		{{'cos.transactions.disputes.add_dispute.dispute_charge.page_title' | i18n}}
+	</h1>
+	<form data-ng-submit="callSubmit()" name="disputesForm" data-ng-controller="SubmitDisputeController" novalidate>
+		<div id="rtmError" data-ng-if="rtmError" class="alert error shown">
+			{{['cos.transactions.disputes.rtmError', ('cos.common.phone_number.investigative_sol.variable' | i18n), rtmTransDetailCode || 0, rtmCode || 0] | i18n}}
+		</div>
+		<p class="heading sub_head" ng-class="{centered: isThemed}">
+			{{'cos.transactions.disputes.add_dispute.complete_form.label' | i18n}}
+		</p>
+		<div class="alert error shown" data-ng-if="!disputesForm.$valid && submitted" role="alert">
+			<span class="offscreen">Alert</span>
+			{{'cos.transactions.disputes_add_dispute.dispute_page_invalid_field_error.label' | i18n}}
+		</div>
+		<dl class="horizontal">
+			<div class="cf" id="disputeEmail">
+				<dt id="disputeEmailLabel">
+					{{'cos.transactions.disputes.add_dispute.email_address.label' | i18n}}
+				</dt>
+				<dd>
+					{{disputesData.email}}
+				</dd>
+			</div>
+			<div class="cf" id="disputeAcctName">
+				<dt id="disputeAcctNameLabel">
+					{{'cos.transactions.disputes.add_dispute.account_name.label' | i18n}}
+				</dt>
+				<dd id="disputeAcctNameField">{{disputesData.accountName}}</dd>
+			</div>
+			<div class="cf" id="disputeMerchName">
+				<dt id="disputeMerchNameLabel">
+					{{'cos.transactions.disputes.add_dispute.merchant_name.label' | i18n}}
+				</dt>
+				<dd>{{disputesData.merchantName}}</dd>
+			</div>
+			<div class="cf" id="disputeTransacteDate">
+				<dt id="disputeTransactDateLabel">
+					{{'cos.transactions.disputes.add_dispute.transaction_date.label' | i18n}}
+				</dt>
+				<dd>{{disputesData.transactionDate | date:region.dateFormat}}</dd>
+			</div>
+			<div class="cf" id="disputeTransactAmt">
+				<dt id="disputeTransactAmtLabel">
+					{{'cos.transactions.disputes.add_dispute.transaction_amount.label' | i18n}}
+				</dt>
+				<dd>{{disputesData.transactionAmount | currency}}</dd>
+			</div>
+			<div class="cf" id="disputeTransactAmtQues">
+					<dt>
+						<label id="disputeTransactAmtQuesLabel">
+							{{'cos.transactions.disputes.add_dispute.dispute_amount.question.label' | i18n}}
+						</label>
+					</dt>
+					<dd>
+						<span>
+							<div id="disputes_amount_error_check" class="alert validate type_xsmall" 
+								data-ng-if="doNotRecognizeDisputePartialAmount || (doNotRecognizeDisputePartialAmount && submitted)">
+								{{'cos.transactions.disputes.add_dispute.disputeAmtRadio.no_recognize.partial_amount_error.text' |i18n}}</div>
+								
+							<div id="disputeAmtRadio_error" 
+							 		class="alert validate type_xsmall" 
+							 		data-ng-if="disputesForm.disputeAmtRadio.$error.required && (submitted || disputesForm.disputeAmtRadio.$error.touchedAndRequired)">
+									{{['cos.transactions.disputes.add_dispute.generic_radio_error.label', 
+									('cos.transactions.disputes.add_dispute.dispute_amount.question.label' | i18n) ] | i18n}}
+							</div>
+							<div>
+								<input 
+										name="disputeAmtRadio" 
+										class="answer sur_yes"
+										id="disputeAmtRadioYes" 
+										data-touched-and-required
+										aria-labelledby="disputeTransactAmtQuesLabel disputeAmtRadioYesLabel"
+										aria-required="true"
+										aria-describedby=""
+										data-ng-model="isFullAmountDisputed"
+										ng-value="true"
+										type="radio" 
+										required
+										data-ng-class="{invalid: disputesForm.disputeAmtRadio.$error.required && (submitted || disputesForm.disputeAmtRadio.$error.touchedAndRequired)}"
+										ng-disabled="prefillDisputeAmtDisabled"
+										ng-readonly="prefillDisputeAmtDisabled"
+										ng-valid=isFullAmountDisputed
+										ng-click="prefillDisputeAmount(true,selected)">
+								<label for="disputeAmtRadioYes" id="disputeAmtRadioYesLabel" class="radio">
+									{{'cos.transactions.disputes.add_dispute.dispute_amount_ques_yes.label' | i18n}}
+								</label>
+								<input 
+										name="disputeAmtRadio" 
+										class="answer sur_no"
+										id="disputeAmtRadioNo" 
+										data-touched-and-required
+										aria-labelledby=""
+										aria-required="true"
+										aria-labelledby="disputeTransactAmtQuesLabel disputeAmtRadioNoLabel"
+										aria-describedby=""
+										type="radio" 
+										data-ng-model="isFullAmountDisputed"
+										ng-value="false"
+										required
+										data-ng-class="{invalid: disputesForm.disputeAmtRadio.$error.required && (submitted || disputesForm.disputeAmtRadio.$error.touchedAndRequired)}"
+										ng-disabled="prefillDisputeAmtDisabled"
+										ng-readonly="prefillDisputeAmtDisabled"
+										ng-valid=isFullAmountDisputed
+										ng-click="prefillDisputeAmount(false,selected)">
+								<label for="disputeAmtRadioNo" id="disputeAmtRadioNoLabel" class="radio">
+									{{'cos.transactions.disputes.add_dispute.dispute_amount_ques_no.label' | i18n}}
+								</label>
+								<span class="tooltip">
+									<a id="disputeAmtRadio_tooltip-tt" 
+										class="tooltip_icon" 
+										href="#disputeAmtRadiotip" 
+										aria-describedby="tip_disputeFullAmount_box">
+										{{'cos.transactions.disputes.add_dispute.screen_reading_information.label' | i18n}}
+									</a>
+								</span>
+								<div class="tip left surcharge_tooltip" id="tip_disputeFullAmount_box">
+									<p id="disputeAmtRadio_tooltip-tt-content">
+										{{'cos.transactions.disputes.add_dispute.disputeAmtRadio_callout.label' | i18n}}
+									</p>
+									<div class="tip_v_left"></div>
+								</div>
+							</div>
+						</span>
+					</dd>
+			</div>
+			<div class="cf" id="disputeDisputedAmt">
+				<dt>
+					<label for="disputed_amount" id="disputeAmtLabel">
+						{{'cos.transactions.disputes.add_dispute.disputed_amount.label' | i18n}}
+					</label>
+				</dt>
+				<dd aria-live="polite">
+						
+					<div id="disputes_amount_error_check" role="alert" class="alert validate type_xsmall" 
+						data-ng-if="disputesForm.disputed.$error.showDoubleCheckError || 
+									(disputesForm.disputed.$error.required && submitted) || 
+									((amountDisputed === region.amountPlaceHolder) && submitted)">
+						{{'cos.transactions.disputes.add_dispute.disputed_amount_double_check_error.label' | i18n}}
+					</div>
+					<div id="disputes_amount_error_exceed" 
+						class="alert validate type_xsmall" 
+						ng-if="disputesForm.disputed.$error.showAmountError">
+						{{'cos.transactions.disputes.add_dispute.disputed_amount_transaction_exceed_error.label' | i18n}}
+					</div>
+					<div>
+						<input 
+							required 
+							name="disputed"
+							type="text"
+							id="disputed_amount" 
+							data-ng-model="amountDisputed"
+							aria-required="true"
+							aria-labelledby="disputeAmtLabel"
+							aria-describedby="dispute_description disputes_amount_error_check disputes_amount_error_exceed" 
+							placeholder="{{region.amountPlaceHolder}}"
+							placeholder-ie8="{{region.amountPlaceHolder}}"
+							min="0.01" 
+							data-ng-paste="$event.preventDefault()" 
+							data-limit-keyboard-input 
+							data-validate-amount-input 
+							data-custom-placeholder-field
+							ng-disabled="isFullAmountDisputed"
+							ng-readonly="isFullAmountDisputed"
+							data-ng-class="{invalid:(disputesForm.disputed.$error.required && submitted) 
+														|| disputesForm.disputed.$error.showAmountError 
+														|| disputesForm.disputed.$error.showDoubleCheckError 
+														|| ((amountDisputed === region.amountPlaceHolder) && submitted)}">
+						<span class="dollar_sign_left" ng-if="('cos.common.currency.prefix.text' | i18n) != 'null'">{{'cos.common.currency.prefix.text' | i18n}}</span>
+						<span class="dollar_sign_right" ng-if="('cos.common.currency.suffix.text' | i18n) != 'null'">{{'cos.common.currency.suffix.text' | i18n}}</span>
+						<br>
+						<span id="dispute_description" class="type_xsmall">
+							{{'cos.transactions.disputes.add_dispute.disputed_amount_instructions.label' | i18n}} 
+							<br>
+							{{'cos.transactions.disputes.add_dispute.disputed_amount_example.label' | i18n}}
+						</span>
+					</div>
+				</dd>
+			</div>
+			<div class="cf">
+				<dt id="dispute_surcharge">
+					<label id="surcharge_label">
+						{{'cos.transactions.disputes.add_dispute.surcharge.label' | i18n}}
+					</label>
+					<span class="offscreen">
+						{{'cos.transactions.disputes.add_dispute.screen_reading_new_content.button' | i18n}}
+					</span>
+				</dt>
+				<dd aria-live="polite">
+					<span>
+					 	<div id="surcharge_error" 
+					 		role="alert"
+					 		class="alert validate type_xsmall" 
+					 		data-ng-if="disputesForm.surcharge.$error.required && (submitted || disputesForm.surcharge.$error.touchedAndRequired)">
+							{{['cos.transactions.disputes.add_dispute.generic_radio_error.label', 
+							('cos.transactions.disputes.add_dispute.surcharge.label' | i18n) ] | i18n}}
+						</div>
+						<div>
+							<input 
+									name="surcharge" 
+									class="answer sur_yes"
+									id="disputesSurchargeYes" 
+									data-ng-model="isSurcharge" 
+									data-ng-value="true"
+									data-touched-and-required
+									aria-labelledby="surcharge_label disputesSurchargeYesLabel"
+									aria-required="true"
+									aria-describedby="surcharge_error surcharge_tooltip-tt-content"
+									type="radio" 
+									required 
+									data-ng-class="{invalid: disputesForm.surcharge.$error.required && (submitted || disputesForm.surcharge.$error.touchedAndRequired)}"
+									ng-click="publishRadioButtonEvent('yes')">
+							<label for="disputesSurchargeYes" id="disputesSurchargeYesLabel" class="radio">
+								{{'cos.transactions.disputes.add_dispute.surcharge_yes.label' | i18n}}
+							</label>
+							<input 
+									name="surcharge" 
+									class="answer sur_no"
+									id="disputesSurchargeNo" 
+									data-ng-model="isSurcharge" 
+									data-ng-value="false"
+									data-touched-and-required
+									aria-labelledby="surcharge_label disputesSurchargeNoLabel"
+									aria-required="true"
+									aria-describedby="surcharge_error surcharge_tooltip-tt-content"
+									type="radio" 
+									required 
+									data-ng-class="{invalid:(disputesForm.surcharge.$error.required && submitted) || (disputesForm.surcharge.$error.touchedAndRequired && disputesForm.surcharge.$error.required)}"
+									ng-click="publishRadioButtonEvent('no')">
+							<label for="disputesSurchargeNo" id="disputesSurchargeNoLabel" class="radio">
+								{{'cos.transactions.disputes.add_dispute.surcharge_no.label' | i18n}}
+							</label>
+							<span class="tooltip">
+								<a id="surcharge_tooltip-tt" 
+									class="tooltip_icon" 
+									href="#surchargetooltip" 
+									aria-describedby="tip_surcharge_box">
+									{{'cos.transactions.disputes.add_dispute.screen_reading_information.label' | i18n}}
+								</a>
+							</span>
+							<div class="tip left surcharge_tooltip" id="tip_surcharge_box">
+								<p id="surcharge_tooltip-tt-content">
+									{{'cos.transactions.disputes.add_dispute.surcharge_callout.label' | i18n}}
+								</p>
+								<div class="tip_v_left"></div>
+							</div>
+						</div>
+					</span>
+				</dd>
+			</div>
+			<div class="cf" data-ng-if="isSurcharge">
+				<span data-ng-include="'disputes/disputesCallUs.html'"></span>
+			</div>
+			<div class="cf" id="disputeReason" data-ng-if="!isSurcharge">
+				<dt id="disputeReasonLabel">
+					<label for="reason" id="reasonLabel">
+						{{'cos.transactions.disputes.add_dispute.dispute_reason.label' | i18n}}
+					</label>
+					<span class="offscreen">
+						{{'cos.transactions.disputes.add_dispute.screen_reading_new_content.button' | i18n}}
+					</span>
+				</dt>
+				<dd class="with_input">
+					<label class="select-container">
+						<select 
+							id="reason" 
+							name="reason" 
+							data-ng-model="reason" 
+							data-ng-init="reason=selected; focused=false; hovered=false;" 
+							style="width:100%;" 
+							data-ng-options="option.disputesOptionText for option in disputesOptions track by option.disputesOption" 
+							data-ng-change="prefillDisputeAmount(null, reason); setTemplate(reason); setSelectedReason(reason); resetForm();" 
+							data-ng-mouseleave="hovered = false" 
+							data-ng-mouseenter="hovered = true" 
+							data-ng-blur="focused=false" 
+							data-ng-focus="focused=true" 
+							data-add-optgroup
+							aria-describedby="reason_desc" 
+							aria-controls="reason_desc">
+						</select>
+					</label>
+					<p class="type_xsmall reason_desc" 
+						id="reason_desc"
+						role="region" 
+						aria-live="polite">
+						{{selected.reasonDesc}}
+					</p>
+				</dd>
+			</div>
+			<div data-ng-if="!isSurcharge">
+				<div data-ng-include src="template"></div>
+			</div>
+			<div class="cf" data-ng-if="selected.displaySubmit && !isSurcharge && !doNotRecognizeDisputePartialAmount">
+				<span id="confirmCheckbox_error_check" class="alert validate type_xsmall"
+					data-ng-if="disputesForm.confirmCheckbox.$error.required && 
+											(submitted || disputesForm.confirmCheckbox.$error.touchedAndRequired)">
+					{{'cos.transactions.disputes.confirm_checkbox.error' | i18n}}
+				</span>
+				<input
+					type="checkbox"
+					id="confirmCheckbox"
+					name="confirmCheckbox"
+					aria-required="true" 
+					aria-describedby="confirmCheckbox_error_check confirmCheckbox_note"
+					required
+					data-touched-and-required
+					data-ng-class="{invalid:disputesForm.confirmCheckbox.$error.required && 
+											(submitted || disputesForm.confirmCheckbox.$error.touchedAndRequired)}"
+					data-ng-model="confirmChecked.value">
+				</input>
+				<label for="confirmCheckbox" id="confirmCheckboxLabel">
+					{{'cos.transactions.disputes.confirm_checkbox.label' | i18n}}
+				</label>
+				
+			</div>
+		</dl>
+		<div>
+			<div class="buttons no_print">
+				<button 
+					type="button" 
+					value="{{'cos.transactions.disputes.add_dispute.cancel.button' | i18n}}" 
+					id="disputesCancel" 
+					class="regressive close" 
+					ng-click="publishCancelButtonEvent()"
+					ng-if="!isThemed"
+					return-to-transactions>
+					{{'cos.transactions.disputes.add_dispute.cancel.button' | i18n}}
+				</button>
+				<a
+					id="disputesCancel"
+					class="button regressive close"
+					ng-click="publishCancelButtonEvent()"
+					ng-if="isThemed"
+					href="{{themeService.ease.returnURL}}">
+					{{'cos.transactions.disputes.add_dispute.cancel.button' | i18n}}
+				</a>
+				</button>
+				<button 
+					type="submit" 
+					value="{{'cos.transactions.disputes.add_dispute.submit.button' | i18n}}" 
+					id="disputesSubmit" 
+					class="action submit" 
+					data-ng-if="selected.displaySubmit && !isSurcharge && !doNotRecognizeDisputePartialAmount"
+					data-ng-disabled="processingSubmit">
+					{{'cos.transactions.disputes.add_dispute.submit.button' | i18n}}
+				</button>
+				<a id="disputesPrintForm" 
+					class="print"
+					href="#" 
+					data-ng-if="selected.displayPrintForm" 
+					data-ng-click="showPrintPage(); $event.preventDefault();">
+					Print Form
+				</a>
+				<div id="tfsButton" style="float:right;">
+				</div>
+			</div>
+		</div>
+	</form>
+</section>
+
+<aside class="one-design" ng-if="!isThemed" id="related_links_aside_container" >
+	<div cos-related-links name="DISPUTE_A_CHARGE" account="{{accountId}}"></div>
+</aside>	
